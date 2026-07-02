@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MerkleNFT</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #08080f;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    /* background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,131,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,131,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .card {
+      background: #0e0e1c;
+      border: 1px solid #1c1c38;
+      border-radius: 24px;
+      padding: 36px;
+      width: 100%;
+      max-width: 460px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* purple glow behind card */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 200px; height: 200px;
+      background: radial-gradient(ellipse, rgba(124,131,255,0.12), transparent 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+
+    .logo {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #7c83ff, #a78bfa);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 24px; font-weight: 700;
+      background: linear-gradient(90deg, #7c83ff, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-size: 13px; color: #444;
+      margin-bottom: 28px;
+      padding-left: 52px;
+    }
+
+    .contract-bar {
+      background: #0a0a16;
+      border: 1px solid #1c1c38;
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+
+    .contract-bar .label { color: #444; }
+    .contract-bar .value { color: #7c83ff; font-family: monospace; font-size: 12px; }
+
+    .status-box {
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+
+    .status-box.info    { background: rgba(124,131,255,0.08); border: 1px solid rgba(124,131,255,0.2); color: #9da4ff; }
+    .status-box.success { background: rgba(16,185,129,0.08);  border: 1px solid rgba(16,185,129,0.25); color: #34d399; }
+    .status-box.error   { background: rgba(239,68,68,0.08);   border: 1px solid rgba(239,68,68,0.25);  color: #f87171; }
+    .status-box.warning { background: rgba(251,191,36,0.08);  border: 1px solid rgba(251,191,36,0.25); color: #fbbf24; }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .info    .dot { background: #7c83ff; box-shadow: 0 0 6px #7c83ff; }
+    .success .dot { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .error   .dot { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    .warning .dot { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.01em;
+    }
+
+    .btn-connect {
+      background: linear-gradient(135deg, #7c83ff, #a78bfa);
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .btn-connect:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-connect:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-mint {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #fff;
+    }
+    .btn-mint:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-mint:disabled { background: #151528; color: #333; cursor: not-allowed; transform: none; }
+
+    .divider { border: none; border-top: 1px solid #1c1c38; margin: 24px 0; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      background: #0a0a16;
+      border: 1px solid #1c1c38;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .stat-label { font-size: 10px; color: #3a3a5c; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
+    .stat-value { font-size: 14px; font-weight: 600; color: #888; }
+    .stat-value.good { color: #10b981; }
+    .stat-value.bad  { color: #ef4444; }
+    .stat-value.purple { color: #a78bfa; }
+
+    .wallet-row {
+      background: #0a0a16;
+      border: 1px solid #1c1c38;
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+
+    .wallet-row .label { color: #444; }
+    .wallet-row .addr  { color: #a78bfa; font-family: monospace; }
+
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #252540;
+      margin-top: 20px;
+    }
+
+    .footer a { color: #3a3a6e; text-decoration: none; }
+    .footer a:hover { color: #7c83ff; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge.wl { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .badge.no { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+
+    <div class="header">
+      <div class="logo">◈</div>
+      <h1>MerkleNFT</h1>
+    </div>
+    <p class="tagline">Whitelist-gated minting &nbsp;·&nbsp; Sepolia Testnet</p>
+
+    <div class="contract-bar">
+      <span class="label">Contract</span>
+      <span class="value">0x1Cf86198...CbF4d3</span>
+    </div>
+
+    <div class="status-box info" id="statusBox">
+      <div class="dot"></div>
+      <span id="statusText">Connect your wallet to check whitelist status</span>
+    </div>
+
+    <button class="btn btn-connect" id="connectBtn" onclick="connectWallet()">
+      Connect MetaMask
+    </button>
+
+    <div class="wallet-row" id="walletRow" style="display:none">
+      <span class="label">Connected wallet</span>
+      <span class="addr" id="walletAddr"></span>
+    </div>
+
+    <div class="stats" id="statsRow" style="display:none">
+      <div class="stat">
+        <div class="stat-label">Whitelist</div>
+        <div class="stat-value" id="wlStat">Checking...</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Already minted</div>
+        <div class="stat-value" id="mintedStat">Checking...</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <button class="btn btn-mint" id="mintBtn" onclick="mintNFT()" disabled>
+      Mint NFT
+    </button>
+
+    <p class="footer">
+      Powered by Hardhat &amp; OpenZeppelin &nbsp;·&nbsp;
+      <a href="https://sepolia.etherscan.io/address/0x1303b1Ff356E72F13b097d9680cC4D85149f4004" target="_blank">View on Etherscan ↗</a>
+    </p>
+
+  </div>
+
+  <script>
+    const CONTRACT  = "0x1Cf86198cf845096d68F52e2752b699222CbF4d3";
+    const SEPOLIA   = 11155111n;
+
+    const ABI = [
+      "function whitelistMint(bytes32[] calldata proof) external",
+      "function isWhitelisted(address addr, bytes32[] calldata proof) public view returns (bool)",
+      "function hasMinted(address) public view returns (bool)",
+    ];
+
+    const PROOFS = {
+      "0x52D627c4E31d8795080959bD934A3622a3bBADC9": [
+        "0xf6ef2e26e317f431d930861d5298af288c96e4fed7d22ec31e2951eef781e8af"
+      ],
+      "0x03e69b5d28ba10AA20b441469523399b1f6200f5": [
+        "0xc82b8bafb56c7fb25390815575914dea6d17e1fd99d7d5aa70c231ffd7e87cd0"
+      ]
+    };
+
+    let provider, signer, contract, userAddress;
+
+    function setStatus(msg, type) {
+      const box  = document.getElementById("statusBox");
+      const text = document.getElementById("statusText");
+      box.className  = "status-box " + type;
+      text.innerHTML = msg;
+    }
+
+    async function connectWallet() {
+      if (!window.ethereum) {
+        setStatus("MetaMask not detected. Please install it first.", "error");
+        return;
+      }
+      try {
+        document.getElementById("connectBtn").innerHTML = '<span class="spinner"></span>Connecting...';
+        document.getElementById("connectBtn").disabled = true;
+
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer   = await provider.getSigner();
+        userAddress = await signer.getAddress();
+
+        const network = await provider.getNetwork();
+        if (network.chainId !== SEPOLIA) {
+          setStatus("Wrong network — please switch MetaMask to Sepolia.", "error");
+          document.getElementById("connectBtn").innerHTML = "Connect MetaMask";
+          document.getElementById("connectBtn").disabled = false;
+          return;
+        }
+
+        contract = new ethers.Contract(CONTRACT, ABI, signer);
+
+        const short = userAddress.slice(0,6) + "..." + userAddress.slice(-4);
+        document.getElementById("connectBtn").innerHTML = "✓ Connected";
+        document.getElementById("walletAddr").textContent = short;
+        document.getElementById("walletRow").style.display = "flex";
+        document.getElementById("statsRow").style.display  = "grid";
+
+        setStatus("Wallet connected! Checking your whitelist status...", "info");
+        await checkStatus();
+
+      } catch (e) {
+        setStatus("Connection cancelled or failed.", "error");
+        document.getElementById("connectBtn").innerHTML = "Connect MetaMask";
+        document.getElementById("connectBtn").disabled = false;
+      }
+    }
+
+    async function checkStatus() {
+      const proof = getProof(userAddress);
+      const wlEl  = document.getElementById("wlStat");
+      const mnEl  = document.getElementById("mintedStat");
+      const mintBtn = document.getElementById("mintBtn");
+
+      if (!proof) {
+        wlEl.textContent  = "Not whitelisted";
+        wlEl.className    = "stat-value bad";
+        mnEl.textContent  = "—";
+        setStatus("Your address is not on the whitelist.", "error");
+        mintBtn.disabled  = true;
+        return;
+      }
+
+      try {
+        const [isWl, hasMinted] = await Promise.all([
+          contract.isWhitelisted(userAddress, proof),
+          contract.hasMinted(userAddress)
+        ]);
+
+        wlEl.textContent = isWl ? "✓ Whitelisted" : "✗ Not whitelisted";
+        wlEl.className   = "stat-value " + (isWl ? "good" : "bad");
+
+        mnEl.textContent = hasMinted ? "Yes" : "No";
+        mnEl.className   = "stat-value " + (hasMinted ? "bad" : "good");
+
+        if (hasMinted) {
+          setStatus("You have already minted your NFT!", "warning");
+          mintBtn.disabled = true;
+        } else if (isWl) {
+          setStatus("You are whitelisted! Go ahead and mint your NFT.", "success");
+          mintBtn.disabled = false;
+        } else {
+          setStatus("Your address is not on the whitelist.", "error");
+          mintBtn.disabled = true;
+        }
+      } catch (e) {
+        setStatus("Error checking status: " + e.message, "error");
+      }
+    }
+
+    async function mintNFT() {
+      const proof = getProof(userAddress);
+      if (!proof) return;
+
+      try {
+        document.getElementById("mintBtn").disabled = true;
+        document.getElementById("mintBtn").innerHTML = '<span class="spinner"></span>Minting...';
+        setStatus("Transaction submitted — waiting for confirmation...", "info");
+
+        const tx = await contract.whitelistMint(proof);
+        await tx.wait();
+
+        const short = tx.hash.slice(0,10) + "...";
+        setStatus(`NFT minted! Tx: <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank" style="color:inherit;text-decoration:underline;">${short} ↗</a>`, "success");
+        document.getElementById("mintBtn").innerHTML = "✓ Minted";
+        document.getElementById("mintedStat").textContent = "Yes";
+        document.getElementById("mintedStat").className   = "stat-value bad";
+
+      } catch (e) {
+        const msg = e.reason || e.message || "Transaction failed";
+        setStatus("Mint failed: " + msg, "error");
+        document.getElementById("mintBtn").disabled = false;
+        document.getElementById("mintBtn").innerHTML = "Mint NFT";
+      }
+    }
+
+    function getProof(addr) {
+      for (const [a, p] of Object.entries(PROOFS)) {
+        if (a.toLowerCase() === addr.toLowerCase()) return p;
+      }
+      return null;
+    }
+  </script>
+</body>
+</html>
